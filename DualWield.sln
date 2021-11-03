@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DualWield", "DualWield\DualWield.csproj", "{497EB368-9410-49A7-A098-9E3905D0DA35}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{497EB368-9410-49A7-A098-9E3905D0DA35}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{497EB368-9410-49A7-A098-9E3905D0DA35}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{497EB368-9410-49A7-A098-9E3905D0DA35}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{497EB368-9410-49A7-A098-9E3905D0DA35}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
