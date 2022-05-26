@@ -26,7 +26,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.1";
+	private const string ModVersion = "1.0.2";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -459,7 +459,10 @@ public class DualWield : BaseUnityPlugin
 				__instance.m_attackAngle = -__instance.m_attackAngle;
 				__instance.m_weapon = __instance.m_character.m_leftItem;
 				Skills.SkillType originalType = __instance.m_character.m_leftItem.m_shared.m_skillType;
-				__instance.m_character.m_leftItem.m_shared.m_skillType = (Skills.SkillType)(int)skillMap[originalType];
+				if (skillMap.ContainsKey(originalType))
+				{
+					__instance.m_character.m_leftItem.m_shared.m_skillType = (Skills.SkillType)(int)skillMap[originalType];
+				}
 
 				__instance.DoMeleeAttack();
 
@@ -504,7 +507,7 @@ public class DualWield : BaseUnityPlugin
 			bool Onehanded(ItemDrop.ItemData? item) => item?.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon;
 			bool dualWield = Onehanded(__instance.m_character.m_rightItem) && Onehanded(__instance.m_character.m_leftItem);
 
-			if (__instance.m_character is Player && dualWield)
+			if (__instance.m_character is Player && dualWield && balancingMap.ContainsKey(__instance.m_weapon.m_shared.m_skillType))
 			{
 				float attackStamina = balancingMap[__instance.m_weapon.m_shared.m_skillType][__instance.m_attackChainLevels <= 1 ? 0 : __instance.m_currentAttackCainLevel + 1].stamina.Value;
 				__result = attackStamina - attackStamina / 6 * __instance.m_character.GetSkillFactor(__instance.m_weapon.m_shared.m_skillType) - attackStamina / 6 * __instance.m_character.GetSkillFactor((Skills.SkillType)(int)skillMap[__instance.m_weapon.m_shared.m_skillType]);
