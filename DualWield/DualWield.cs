@@ -18,6 +18,7 @@ using System.Diagnostics;
 namespace DualWield;
 
 [BepInPlugin(ModGUID, ModName, ModVersion)]
+[BepInIncompatibility("randyknapp.mods.epicloot")]
 public class DualWield : BaseUnityPlugin
 {
 #if DPSLOG
@@ -26,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.2";
+	private const string ModVersion = "1.0.3";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -50,13 +51,15 @@ public class DualWield : BaseUnityPlugin
 	}
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
+	private static ConfigEntry<string> dualWieldExclusionList = null!;
 
 	private static AssetBundle asset = null!;
 	private static readonly Dictionary<string, Dictionary<string, string>> replacementMap = new();
 	private static readonly Dictionary<string, int> attackMap = new();
 	private static readonly Dictionary<string, AnimationClip> ExternalAnimations = new();
 	private static readonly Dictionary<string, RuntimeAnimatorController> CustomRuntimeControllers = new();
-
+	private static readonly List<string> DualWieldExclusion = new();
+	
 	private static readonly Dictionary<Skills.SkillType, DualSkill> skillMap = new();
 
 	private enum DualSkill
@@ -153,7 +156,9 @@ public class DualWield : BaseUnityPlugin
 	{
 		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
 		configSync.AddLockingConfigEntry(serverConfigLocked);
-
+		dualWieldExclusionList = config("1 - General", "Dual Wield Exclusion", "", "List prefab names of weapons that should be excluded from being dual-wielded. Comma separated.");
+		dualWieldExclusionList.SettingChanged += UpdateExclusionList;
+		
 		asset = GetAssetBundle("dwanimations");
 		ExternalAnimations["Attack1External"] = asset.LoadAsset<AnimationClip>("Attack1");
 		ExternalAnimations["Attack2External"] = asset.LoadAsset<AnimationClip>("Attack2");
@@ -202,8 +207,19 @@ public class DualWield : BaseUnityPlugin
 		Assembly assembly = Assembly.GetExecutingAssembly();
 		Harmony harmony = new(ModGUID);
 		harmony.PatchAll(assembly);
+		
+		UpdateExclusionList(null, null);
 	}
 
+	private static void UpdateExclusionList(object? sender, EventArgs? e)
+	{
+		DualWieldExclusion.Clear();
+		foreach (string s in dualWieldExclusionList.Value.Split(','))
+		{
+			DualWieldExclusion.Add(s.Trim());
+		}
+	}
+	
 	private static void AddDualSkill(Skills.SkillType original, DualSkill newSkill, string skillName, string description, string iconName)
 	{
 		skillMap.Add(original, newSkill);
@@ -272,7 +288,7 @@ public class DualWield : BaseUnityPlugin
 	{
 		private static bool CheckDualOneHandedWeaponEquip(Humanoid __instance, ItemDrop.ItemData item, bool triggerEquipEffects)
 		{
-			if (__instance is Player player && player.m_rightItem?.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && player.m_rightItem.m_shared.m_skillType == item.m_shared.m_skillType && item.m_shared.m_skillType is not Skills.SkillType.Spears)
+			if (__instance is Player player && player.m_rightItem?.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && player.m_rightItem.m_shared.m_skillType == item.m_shared.m_skillType && item.m_shared.m_skillType is not Skills.SkillType.Spears && !DualWieldExclusion.Contains(item.m_dropPrefab.name))
 			{
 				if (player.m_leftItem != null)
 				{
