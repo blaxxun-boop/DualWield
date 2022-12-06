@@ -9,6 +9,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using JetBrains.Annotations;
 using ServerSync;
+using SkillManager;
 using UnityEngine;
 #if DPSLOG
 using Debug = UnityEngine.Debug;
@@ -27,7 +28,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.4";
+	private const string ModVersion = "1.0.5";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -52,6 +53,8 @@ public class DualWield : BaseUnityPlugin
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	private static ConfigEntry<string> dualWieldExclusionList = null!;
+	private static ConfigEntry<float> experienceGainFactor = null!;
+	private static ConfigEntry<Toggle> singleOffhandSkill = null!;
 
 	private static AssetBundle asset = null!;
 	private static readonly Dictionary<string, Dictionary<string, string>> replacementMap = new();
@@ -59,16 +62,8 @@ public class DualWield : BaseUnityPlugin
 	private static readonly Dictionary<string, AnimationClip> ExternalAnimations = new();
 	private static readonly Dictionary<string, RuntimeAnimatorController> CustomRuntimeControllers = new();
 	private static readonly List<string> DualWieldExclusion = new();
-	
-	private static readonly Dictionary<Skills.SkillType, DualSkill> skillMap = new();
 
-	private enum DualSkill
-	{
-		DualAxes = 874298,
-		DualClubs = 3981298,
-		DualKnives = 409822,
-		DualSwords = 4982908
-	}
+	private static readonly Dictionary<Skills.SkillType, Skills.SkillType> skillMap = new();
 
 	private static readonly Dictionary<Skills.SkillType, AnimationBalancing[]> balancingMapDefault = new()
 	{
@@ -154,11 +149,54 @@ public class DualWield : BaseUnityPlugin
 
 	public void Awake()
 	{
+		List<Skill> skills = new();
+
+		Skill skill = new("Dual Axes", "dualaxes.png");
+		skill.Description.English("Increases the damage done with your left hand, when dual wielding axes.");
+		skill.Configurable = false;
+		skills.Add(skill);
+
+		skill = new Skill("Dual Clubs", "dualclubs.png");
+		skill.Description.English("Increases the damage done with your left hand, when dual wielding clubs.");
+		skill.Configurable = false;
+		skills.Add(skill);
+
+		skill = new Skill("Dual Knives", "dualknives.png");
+		skill.Description.English("Increases the damage done with your left hand, when dual wielding knives.");
+		skill.Configurable = false;
+		skills.Add(skill);
+
+		skill = new Skill("Dual Swords", "dualswords.png");
+		skill.Description.English("Increases the damage done with your left hand, when dual wielding swords.");
+		skill.Configurable = false;
+		skills.Add(skill);
+
+		skill = new Skill("Dual Offhand", "dualswords.png");
+		skill.Description.English("Increases the damage done with your left hand, when dual wielding.");
+		skill.Configurable = false;
+		skills.Add(skill);
+
 		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
 		configSync.AddLockingConfigEntry(serverConfigLocked);
 		dualWieldExclusionList = config("1 - General", "Dual Wield Exclusion", "", "List prefab names of weapons that should be excluded from being dual-wielded. Comma separated.");
 		dualWieldExclusionList.SettingChanged += UpdateExclusionList;
-		
+		experienceGainFactor = config("1 - General", "Dual Wield Experience Factor", 1f, new ConfigDescription("Factor for experience gained for the dual wielding skills.", new AcceptableValueRange<float>(0f, 5f)));
+		experienceGainFactor.SettingChanged += (_, _) =>
+		{
+			foreach (Skill dualSkill in skills)
+			{
+				dualSkill.SkillGainFactor = experienceGainFactor.Value;
+			}
+		};
+		foreach (Skill dualSkill in skills)
+		{
+			dualSkill.SkillGainFactor = experienceGainFactor.Value;
+		}
+		singleOffhandSkill = config("1 - General", "Single Offhand Skill", Toggle.Off, new ConfigDescription("If on, all weapon types share a single offhand skill."));
+		singleOffhandSkill.SettingChanged += (_, _) => ToggleOffhandSkill();
+
+		ToggleOffhandSkill();
+
 		asset = GetAssetBundle("dwanimations");
 		ExternalAnimations["Attack1External"] = asset.LoadAsset<AnimationClip>("Attack1");
 		ExternalAnimations["Attack2External"] = asset.LoadAsset<AnimationClip>("Attack2");
@@ -172,6 +210,7 @@ public class DualWield : BaseUnityPlugin
 		attackMap["Attack1"] = 1;
 		attackMap["Attack2"] = 2;
 		attackMap["Attack3"] = 3;
+		attackMap["Axe Secondary Attack"] = 0;
 		attackMap["axe_swing"] = 1;
 		attackMap["Axe combo 2"] = 2;
 		attackMap["Axe combo 3"] = 3;
@@ -181,11 +220,6 @@ public class DualWield : BaseUnityPlugin
 
 		InitSwordAnimation();
 		InitAxesAnimation();
-
-		AddDualSkill(Skills.SkillType.Axes, DualSkill.DualAxes, "Dual Axes", "Increases the damage done with your left hand, when dual wielding axes.", "dualaxes.png");
-		AddDualSkill(Skills.SkillType.Clubs, DualSkill.DualClubs, "Dual Clubs", "Increases the damage done with your left hand, when dual wielding clubs.", "dualclubs.png");
-		AddDualSkill(Skills.SkillType.Knives, DualSkill.DualKnives, "Dual Knives", "Increases the damage done with your left hand, when dual wielding knives.", "dualknives.png");
-		AddDualSkill(Skills.SkillType.Swords, DualSkill.DualSwords, "Dual Swords", "Increases the damage done with your left hand, when dual wielding swords.", "dualswords.png");
 
 		foreach (KeyValuePair<Skills.SkillType, AnimationBalancing[]> balancingKv in balancingMapDefault)
 		{
@@ -207,8 +241,28 @@ public class DualWield : BaseUnityPlugin
 		Assembly assembly = Assembly.GetExecutingAssembly();
 		Harmony harmony = new(ModGUID);
 		harmony.PatchAll(assembly);
-		
+
 		UpdateExclusionList(null, null);
+	}
+
+	private static void ToggleOffhandSkill()
+	{
+		skillMap.Clear();
+
+		if (singleOffhandSkill.Value == Toggle.On)
+		{
+			skillMap.Add(Skills.SkillType.Swords, Skill.fromName("Dual Offhand"));
+			skillMap.Add(Skills.SkillType.Knives, Skill.fromName("Dual Offhand"));
+			skillMap.Add(Skills.SkillType.Clubs, Skill.fromName("Dual Offhand"));
+			skillMap.Add(Skills.SkillType.Axes, Skill.fromName("Dual Offhand"));
+		}
+		else
+		{
+			skillMap.Add(Skills.SkillType.Axes, Skill.fromName("Dual Axes"));
+			skillMap.Add(Skills.SkillType.Clubs, Skill.fromName("Dual Clubs"));
+			skillMap.Add(Skills.SkillType.Knives, Skill.fromName("Dual Knives"));
+			skillMap.Add(Skills.SkillType.Swords, Skill.fromName("Dual Swords"));
+		}
 	}
 
 	private static void UpdateExclusionList(object? sender, EventArgs? e)
@@ -218,12 +272,6 @@ public class DualWield : BaseUnityPlugin
 		{
 			DualWieldExclusion.Add(s.Trim());
 		}
-	}
-	
-	private static void AddDualSkill(Skills.SkillType original, DualSkill newSkill, string skillName, string description, string iconName)
-	{
-		skillMap.Add(original, newSkill);
-		DualWieldSkills.AddNewSkill(newSkill, skillName, description, 1f, DualWieldSkills.loadSprite(iconName, 64, 64));
 	}
 
 	private static AssetBundle GetAssetBundle(string filename)
@@ -361,6 +409,31 @@ public class DualWield : BaseUnityPlugin
 		}
 	}
 
+	[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.ShowHandItems))]
+	private static class SwapHiddenItemsEquipOrder
+	{
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+		{
+			FieldInfo leftHand = AccessTools.DeclaredField(typeof(Humanoid), nameof(Humanoid.m_hiddenLeftItem));
+			FieldInfo rightHand = AccessTools.DeclaredField(typeof(Humanoid), nameof(Humanoid.m_hiddenRightItem));
+			foreach (CodeInstruction instruction in instructions)
+			{
+				if (instruction.LoadsField(leftHand))
+				{
+					yield return new CodeInstruction(OpCodes.Ldfld, rightHand);
+				}
+				else if (instruction.LoadsField(rightHand))
+				{
+					yield return new CodeInstruction(OpCodes.Ldfld, leftHand);
+				}
+				else
+				{
+					yield return instruction;
+				}
+			}
+		}
+	}
+
 	[HarmonyPatch(typeof(VisEquipment), nameof(VisEquipment.SetWeaponTrails))]
 	private static class Patch_VisEquipment_SetWeaponTrails
 	{
@@ -385,7 +458,7 @@ public class DualWield : BaseUnityPlugin
 			{
 				return;
 			}
-			
+
 			if (joint == __instance.m_backMelee)
 			{
 				if (joint.childCount > 1)
@@ -417,7 +490,7 @@ public class DualWield : BaseUnityPlugin
 				ItemDrop.ItemData.SharedData? sharedData(Func<VisEquipment, int> eq) => eq(player.m_visEquipment) is int hash and not 0 ? ObjectDB.instance.GetItemPrefab(hash)?.GetComponent<ItemDrop>()?.m_itemData.m_shared : null;
 				ItemDrop.ItemData.SharedData? rightHand = sharedData(v => v.m_currentRightItemHash);
 				ItemDrop.ItemData.SharedData? leftHand = sharedData(v => v.m_currentLeftItemHash);
-				bool HasAttackName(string? anim) => anim != null && name.StartsWith(anim) && anim.Length <= name.Length + 1;
+				bool HasAttackName(string? anim) => (anim != null && name.StartsWith(anim, StringComparison.Ordinal) && anim.Length <= name.Length + 1) || anim == "swing_axe";
 				bool HasAttack(ItemDrop.ItemData.SharedData? data) => HasAttackName(data?.m_attack.m_attackAnimation) || HasAttackName(data?.m_secondaryAttack.m_attackAnimation);
 				if (HasAttack(leftHand) || HasAttack(rightHand))
 				{
@@ -426,7 +499,7 @@ public class DualWield : BaseUnityPlugin
 					if (Onehanded(leftHand) && Onehanded(rightHand))
 					{
 						controllerName = "DWswords";
-						if (name == "mace_secondary" || rightHand!.m_attack.m_attackAnimation == "swing_axe")
+						if (name == "mace_secondary" || rightHand!.m_attack.m_attackAnimation == "swing_axe" || rightHand.m_secondaryAttack.m_attackAnimation == "axe_secondary")
 						{
 							controllerName = "DWaxes";
 						}
@@ -477,7 +550,7 @@ public class DualWield : BaseUnityPlugin
 				Skills.SkillType originalType = __instance.m_character.m_leftItem.m_shared.m_skillType;
 				if (skillMap.ContainsKey(originalType))
 				{
-					__instance.m_character.m_leftItem.m_shared.m_skillType = (Skills.SkillType)(int)skillMap[originalType];
+					__instance.m_character.m_leftItem.m_shared.m_skillType = skillMap[originalType];
 				}
 
 				__instance.DoMeleeAttack();
@@ -506,7 +579,7 @@ public class DualWield : BaseUnityPlugin
 	{
 		private static bool Prefix(Player __instance, Skills.SkillType skill, ref float __result)
 		{
-			if (skillMap.ContainsValue((DualSkill)(int)skill))
+			if (skillMap.ContainsValue(skill))
 			{
 				__result = 0.03f + __instance.GetSkillFactor(skill) * 1.5f;
 				return false;
@@ -526,7 +599,7 @@ public class DualWield : BaseUnityPlugin
 			if (__instance.m_character is Player && dualWield && balancingMap.ContainsKey(__instance.m_weapon.m_shared.m_skillType))
 			{
 				float attackStamina = balancingMap[__instance.m_weapon.m_shared.m_skillType][__instance.m_attackChainLevels <= 1 ? 0 : __instance.m_currentAttackCainLevel + 1].stamina.Value;
-				__result = attackStamina - attackStamina / 6 * __instance.m_character.GetSkillFactor(__instance.m_weapon.m_shared.m_skillType) - attackStamina / 6 * __instance.m_character.GetSkillFactor((Skills.SkillType)(int)skillMap[__instance.m_weapon.m_shared.m_skillType]);
+				__result = attackStamina - attackStamina / 6 * __instance.m_character.GetSkillFactor(__instance.m_weapon.m_shared.m_skillType) - attackStamina / 6 * __instance.m_character.GetSkillFactor(skillMap[__instance.m_weapon.m_shared.m_skillType]);
 
 				return false;
 			}
@@ -594,50 +667,21 @@ public class DualWield : BaseUnityPlugin
 			}
 		}
 	}
-#endif
 
 	[HarmonyPatch(typeof(Humanoid), nameof(Humanoid.StartAttack))]
 	public static class Patch_Humanoid_StartAttack
 	{
-		private static void Prefix(Humanoid __instance, bool secondaryAttack, out Attack? __state)
-		{
-			__state = null;
-
-			if (__instance is Player player && secondaryAttack)
-			{
-				bool Onehanded(ItemDrop.ItemData? item) => item?.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon;
-				bool dualweapon = Onehanded(player.m_rightItem) && Onehanded(player.m_leftItem);
-				if (dualweapon && player.m_rightItem?.m_shared.m_attack?.m_attackAnimation == "swing_axe")
-				{
-					Attack attackCopy = ObjectDB.instance.GetItemPrefab("SwordIron").GetComponent<ItemDrop>().m_itemData.m_shared.m_secondaryAttack.Clone();
-					attackCopy.m_specialHitSkill = Skills.SkillType.None;
-					attackCopy.m_damageMultiplier = 2;
-
-					__state = player.m_rightItem.m_shared.m_secondaryAttack;
-					player.m_rightItem.m_shared.m_secondaryAttack = attackCopy;
-				}
-			}
-		}
-
 		private static void Postfix(Humanoid __instance, Attack? __state, bool __result)
 		{
-			if (__state is not null)
-			{
-				__instance.m_rightItem.m_shared.m_secondaryAttack = __state;
-			}
-
-#if DPSLOG
 			Attack? w = __instance.m_currentAttack;
 			if (__result && __instance is Player && w?.m_currentAttackCainLevel == 0)
 			{
 				stopwatch.Restart();
 				receivedDmg.Clear();
 			}
-#else
-				_ = __result;
-#endif
 		}
 	}
+#endif
 
 	[HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.FixedUpdate))]
 	public static class Patch_CharacterAnimEvent_FixedUpdate
@@ -650,6 +694,8 @@ public class DualWield : BaseUnityPlugin
 			{
 				return;
 			}
+
+			//Debug.Log(___m_animator.GetCurrentAnimatorClipInfo(0)[0].clip.name);
 
 			// check if our marker bit is present and not within float epsilon
 			if (___m_animator.speed * 1e4f % 10 is >= 1 and <= 3 || ___m_animator.speed <= 0.001f)
