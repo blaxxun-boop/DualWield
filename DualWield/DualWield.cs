@@ -19,7 +19,7 @@ using System.Diagnostics;
 namespace DualWield;
 
 [BepInPlugin(ModGUID, ModName, ModVersion)]
-[BepInIncompatibility("randyknapp.mods.epicloot")]
+[BepInIncompatibility("org.bepinex.plugins.valheim_plus")]
 public class DualWield : BaseUnityPlugin
 {
 #if DPSLOG
@@ -28,7 +28,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.5";
+	private const string ModVersion = "1.0.6";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -54,6 +54,7 @@ public class DualWield : BaseUnityPlugin
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	private static ConfigEntry<string> dualWieldExclusionList = null!;
 	private static ConfigEntry<float> experienceGainFactor = null!;
+	private static ConfigEntry<int> experienceLoss = null!;
 	private static ConfigEntry<Toggle> singleOffhandSkill = null!;
 
 	private static AssetBundle asset = null!;
@@ -191,6 +192,18 @@ public class DualWield : BaseUnityPlugin
 		foreach (Skill dualSkill in skills)
 		{
 			dualSkill.SkillGainFactor = experienceGainFactor.Value;
+		}
+		experienceLoss = config("1 - General", "Skill Experience Loss", 5, new ConfigDescription("How much experience to lose in the dual wielding skills on death.", new AcceptableValueRange<int>(0, 100)));
+		experienceLoss.SettingChanged += (_, _) =>
+		{
+			foreach (Skill dualSkill in skills)
+			{
+				dualSkill.SkillLoss = experienceLoss.Value;
+			}
+		};
+		foreach (Skill dualSkill in skills)
+		{
+			dualSkill.SkillLoss = experienceLoss.Value;
 		}
 		singleOffhandSkill = config("1 - General", "Single Offhand Skill", Toggle.Off, new ConfigDescription("If on, all weapon types share a single offhand skill."));
 		singleOffhandSkill.SettingChanged += (_, _) => ToggleOffhandSkill();
@@ -504,7 +517,11 @@ public class DualWield : BaseUnityPlugin
 							controllerName = "DWaxes";
 						}
 					}
-					FastReplaceRAC(player, CustomRuntimeControllers[controllerName]);
+					// in case this is called before the first Player.Start
+					if (CustomRuntimeControllers.TryGetValue(controllerName, out RuntimeAnimatorController controller))
+					{
+						FastReplaceRAC(player, controller);
+					}
 				}
 			}
 		}
@@ -513,14 +530,33 @@ public class DualWield : BaseUnityPlugin
 	[HarmonyPatch(typeof(Attack), nameof(Attack.OnAttackTrigger))]
 	private static class Patch_Attack_OnAttackTrigger
 	{
-		private static Attack.HitPointType? originalHitpointType;
-		private static float dmgFactor;
-		private static readonly List<ItemDrop.ItemData.SharedData> alteredSharedData = new();
-
-		private static void ApplyDmgFactor(float dmgFactor)
+		private class DmgFactor
 		{
-			foreach (ItemDrop.ItemData.SharedData item in alteredSharedData)
+			public float dmgFactor;
+			public float knockback;
+		}
+
+		private static Attack.HitPointType? originalHitpointType;
+		private static readonly Dictionary<ItemDrop.ItemData.SharedData, DmgFactor> alteredSharedData = new();
+
+		private static void ApplyDmgFactor(bool reverse, string attackAnimation)
+		{
+			foreach (KeyValuePair<ItemDrop.ItemData.SharedData, DmgFactor> kv in alteredSharedData)
 			{
+				ItemDrop.ItemData.SharedData item = kv.Key;
+				if (item.m_skillType is Skills.SkillType.Clubs or Skills.SkillType.Axes && attackAnimation is "axe_secondary" or "mace_secondary")
+				{
+					if (reverse)
+					{
+						item.m_attackForce = kv.Value.knockback;
+					}
+					else
+					{
+						kv.Value.knockback = item.m_attackForce;
+						item.m_attackForce = 0;
+					}
+				}
+				float dmgFactor = reverse ? 1 / kv.Value.dmgFactor : kv.Value.dmgFactor;
 				item.m_damages.Modify(dmgFactor);
 				item.m_backstabBonus /= dmgFactor;
 			}
@@ -528,19 +564,17 @@ public class DualWield : BaseUnityPlugin
 
 		private static void Prefix(Attack __instance)
 		{
-			dmgFactor = 1;
-
 			if (__instance.m_character is Player && __instance.m_character.m_leftItem?.m_shared is { } leftHand && __instance.m_character.m_rightItem?.m_shared is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon)
 			{
 				if (attackMap.TryGetValue(__instance.m_character.m_animator.GetCurrentAnimatorClipInfo(0)[0].clip.name, out int attackId) && balancingMap.ContainsKey(rightHand.m_skillType))
 				{
-					dmgFactor = balancingMap[rightHand.m_skillType][attackId].damage.Value / 100;
-					alteredSharedData.Add(rightHand);
+					float dmgFactor = balancingMap[rightHand.m_skillType][attackId].damage.Value / 100;
+					alteredSharedData.Add(rightHand, new DmgFactor { dmgFactor = dmgFactor });
 					if (rightHand != leftHand)
 					{
-						alteredSharedData.Add(leftHand);
+						alteredSharedData.Add(leftHand, new DmgFactor { dmgFactor = dmgFactor });
 					}
-					ApplyDmgFactor(dmgFactor);
+					ApplyDmgFactor(false, __instance.m_attackAnimation);
 				}
 
 				originalHitpointType = __instance.m_hitPointtype;
@@ -569,7 +603,7 @@ public class DualWield : BaseUnityPlugin
 				originalHitpointType = null;
 			}
 
-			ApplyDmgFactor(1 / dmgFactor);
+			ApplyDmgFactor(true, __instance.m_attackAnimation);
 			alteredSharedData.Clear();
 		}
 	}
