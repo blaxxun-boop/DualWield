@@ -28,7 +28,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.6";
+	private const string ModVersion = "1.0.7";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -304,9 +304,9 @@ public class DualWield : BaseUnityPlugin
 		foreach (AnimationClip animation in aoc.animationClips)
 		{
 			string name = animation.name;
-			if (replacement.ContainsKey(name))
+			if (replacement.TryGetValue(name, out string value))
 			{
-				AnimationClip newClip = Instantiate(ExternalAnimations[replacement[name]]);
+				AnimationClip newClip = Instantiate(ExternalAnimations[value]);
 				newClip.name = name;
 				anims.Add(new KeyValuePair<AnimationClip, AnimationClip>(animation, newClip));
 			}
@@ -416,7 +416,7 @@ public class DualWield : BaseUnityPlugin
 				ItemDrop.ItemData leftItem = player.m_leftItem;
 				player.UnequipItem(player.m_leftItem, false);
 				player.m_rightItem = leftItem;
-				player.m_rightItem.m_equiped = true;
+				player.m_rightItem.m_equipped = true;
 				player.m_leftItem = null;
 			}
 		}
@@ -566,9 +566,9 @@ public class DualWield : BaseUnityPlugin
 		{
 			if (__instance.m_character is Player && __instance.m_character.m_leftItem?.m_shared is { } leftHand && __instance.m_character.m_rightItem?.m_shared is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon)
 			{
-				if (attackMap.TryGetValue(__instance.m_character.m_animator.GetCurrentAnimatorClipInfo(0)[0].clip.name, out int attackId) && balancingMap.ContainsKey(rightHand.m_skillType))
+				if (attackMap.TryGetValue(__instance.m_character.m_animator.GetCurrentAnimatorClipInfo(0)[0].clip.name, out int attackId) && balancingMap.TryGetValue(rightHand.m_skillType, out AnimationBalancingConfig[] value))
 				{
-					float dmgFactor = balancingMap[rightHand.m_skillType][attackId].damage.Value / 100;
+					float dmgFactor = value[attackId].damage.Value / 100;
 					alteredSharedData.Add(rightHand, new DmgFactor { dmgFactor = dmgFactor });
 					if (rightHand != leftHand)
 					{
@@ -582,9 +582,9 @@ public class DualWield : BaseUnityPlugin
 				__instance.m_attackAngle = -__instance.m_attackAngle;
 				__instance.m_weapon = __instance.m_character.m_leftItem;
 				Skills.SkillType originalType = __instance.m_character.m_leftItem.m_shared.m_skillType;
-				if (skillMap.ContainsKey(originalType))
+				if (skillMap.TryGetValue(originalType, out Skills.SkillType value1))
 				{
-					__instance.m_character.m_leftItem.m_shared.m_skillType = skillMap[originalType];
+					__instance.m_character.m_leftItem.m_shared.m_skillType = value1;
 				}
 
 				__instance.DoMeleeAttack();
@@ -630,9 +630,9 @@ public class DualWield : BaseUnityPlugin
 			bool Onehanded(ItemDrop.ItemData? item) => item?.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon;
 			bool dualWield = Onehanded(__instance.m_character.m_rightItem) && Onehanded(__instance.m_character.m_leftItem);
 
-			if (__instance.m_character is Player && dualWield && balancingMap.ContainsKey(__instance.m_weapon.m_shared.m_skillType))
+			if (__instance.m_character is Player && dualWield && balancingMap.TryGetValue(__instance.m_weapon.m_shared.m_skillType, out AnimationBalancingConfig[] value))
 			{
-				float attackStamina = balancingMap[__instance.m_weapon.m_shared.m_skillType][__instance.m_attackChainLevels <= 1 ? 0 : __instance.m_currentAttackCainLevel + 1].stamina.Value;
+				float attackStamina = value[__instance.m_attackChainLevels <= 1 ? 0 : __instance.m_currentAttackCainLevel + 1].stamina.Value;
 				__result = attackStamina - attackStamina / 6 * __instance.m_character.GetSkillFactor(__instance.m_weapon.m_shared.m_skillType) - attackStamina / 6 * __instance.m_character.GetSkillFactor(skillMap[__instance.m_weapon.m_shared.m_skillType]);
 
 				return false;
@@ -717,7 +717,7 @@ public class DualWield : BaseUnityPlugin
 	}
 #endif
 
-	[HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.FixedUpdate))]
+	[HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
 	public static class Patch_CharacterAnimEvent_FixedUpdate
 	{
 		[UsedImplicitly]
@@ -758,9 +758,9 @@ public class DualWield : BaseUnityPlugin
 			float speedFactor = 1f;
 
 			ItemDrop.ItemData.SharedData? sharedData(int hash) => hash == 0 ? null : ObjectDB.instance.GetItemPrefab(hash)?.GetComponent<ItemDrop>()?.m_itemData.m_shared;
-			if (sharedData(player.m_visEquipment.m_currentLeftItemHash) is { } leftHand && sharedData(player.m_visEquipment.m_currentRightItemHash) is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && balancingMap.ContainsKey(rightHand.m_skillType))
+			if (sharedData(player.m_visEquipment.m_currentLeftItemHash) is { } leftHand && sharedData(player.m_visEquipment.m_currentRightItemHash) is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && balancingMap.TryGetValue(rightHand.m_skillType, out AnimationBalancingConfig[] value))
 			{
-				speedFactor = balancingMap[rightHand.m_skillType][attackId].speed.Value / 100;
+				speedFactor = value[attackId].speed.Value / 100;
 			}
 
 			___m_animator.speed = (float)Math.Round(___m_animator.speed * speedFactor, 3) + ___m_animator.speed % 1e-4f + 2e-4f;
