@@ -7,7 +7,6 @@ using System.Reflection.Emit;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
-using JetBrains.Annotations;
 using ServerSync;
 using SkillManager;
 using UnityEngine;
@@ -28,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.7";
+	private const string ModVersion = "1.0.8";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -256,6 +255,42 @@ public class DualWield : BaseUnityPlugin
 		harmony.PatchAll(assembly);
 
 		UpdateExclusionList(null, null);
+
+		AnimationSpeedManager.Add((character, speed) =>
+		{
+			if (!character.IsPlayer() || !character.InAttack())
+			{
+				return speed;
+			}
+
+			Player player = (Player)character;
+			Attack? currentAttack = player.m_currentAttack;
+			if (currentAttack == null)
+			{
+				return speed;
+			}
+
+			AnimatorClipInfo[] animInfo = character.m_animator.GetCurrentAnimatorClipInfo(0);
+			if (animInfo.Length == 0)
+			{
+				return speed;
+			}
+
+			if (!attackMap.TryGetValue(animInfo[0].clip.name, out int attackId))
+			{
+				return speed;
+			}
+
+			float speedFactor = 1f;
+
+			ItemDrop.ItemData.SharedData? sharedData(int hash) => hash == 0 ? null : ObjectDB.instance.GetItemPrefab(hash)?.GetComponent<ItemDrop>()?.m_itemData.m_shared;
+			if (sharedData(player.m_visEquipment.m_currentLeftItemHash) is { } leftHand && sharedData(player.m_visEquipment.m_currentRightItemHash) is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && balancingMap.TryGetValue(rightHand.m_skillType, out AnimationBalancingConfig[] value))
+			{
+				speedFactor = value[attackId].speed.Value / 100;
+			}
+
+			return speed * speedFactor;
+		}, Priority.Low);
 	}
 
 	private static void ToggleOffhandSkill()
@@ -716,54 +751,4 @@ public class DualWield : BaseUnityPlugin
 		}
 	}
 #endif
-
-	[HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
-	public static class Patch_CharacterAnimEvent_FixedUpdate
-	{
-		[UsedImplicitly]
-		[HarmonyPriority(Priority.LowerThanNormal)]
-		private static void Prefix(Character ___m_character, ref Animator ___m_animator)
-		{
-			if (!___m_character.IsPlayer() || !___m_character.InAttack())
-			{
-				return;
-			}
-
-			//Debug.Log(___m_animator.GetCurrentAnimatorClipInfo(0)[0].clip.name);
-
-			// check if our marker bit is present and not within float epsilon
-			if (___m_animator.speed * 1e4f % 10 is >= 1 and <= 3 || ___m_animator.speed <= 0.001f)
-			{
-				return;
-			}
-
-			Player player = (Player)___m_character;
-			Attack? currentAttack = player.m_currentAttack;
-			if (currentAttack == null)
-			{
-				return;
-			}
-
-			AnimatorClipInfo[] animInfo = ___m_character.m_animator.GetCurrentAnimatorClipInfo(0);
-			if (animInfo.Length == 0)
-			{
-				return;
-			}
-
-			if (!attackMap.TryGetValue(animInfo[0].clip.name, out int attackId))
-			{
-				return;
-			}
-
-			float speedFactor = 1f;
-
-			ItemDrop.ItemData.SharedData? sharedData(int hash) => hash == 0 ? null : ObjectDB.instance.GetItemPrefab(hash)?.GetComponent<ItemDrop>()?.m_itemData.m_shared;
-			if (sharedData(player.m_visEquipment.m_currentLeftItemHash) is { } leftHand && sharedData(player.m_visEquipment.m_currentRightItemHash) is { } rightHand && leftHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && rightHand.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon && balancingMap.TryGetValue(rightHand.m_skillType, out AnimationBalancingConfig[] value))
-			{
-				speedFactor = value[attackId].speed.Value / 100;
-			}
-
-			___m_animator.speed = (float)Math.Round(___m_animator.speed * speedFactor, 3) + ___m_animator.speed % 1e-4f + 2e-4f;
-		}
-	}
 }
