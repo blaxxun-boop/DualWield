@@ -27,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.8";
+	private const string ModVersion = "1.0.9";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -47,7 +47,7 @@ public class DualWield : BaseUnityPlugin
 	private enum Toggle
 	{
 		On = 1,
-		Off = 0
+		Off = 0,
 	}
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
@@ -73,7 +73,7 @@ public class DualWield : BaseUnityPlugin
 				new AnimationBalancing { speed = 0.6f, damage = 0.9f, stamina = 40 },
 				new AnimationBalancing { speed = 0.8f, damage = 0.9f, stamina = 20 },
 				new AnimationBalancing { speed = 0.7f, damage = 0.95f, stamina = 20 },
-				new AnimationBalancing { speed = 0.6f, damage = 1.7f, stamina = 30 }
+				new AnimationBalancing { speed = 0.6f, damage = 1.7f, stamina = 30 },
 			}
 		},
 		{
@@ -82,7 +82,7 @@ public class DualWield : BaseUnityPlugin
 				new AnimationBalancing { speed = 0.8f, damage = 0.6f, stamina = 35 },
 				new AnimationBalancing { speed = 1.2f, damage = 0.65f, stamina = 14 },
 				new AnimationBalancing { speed = 1.3f, damage = 0.75f, stamina = 15 },
-				new AnimationBalancing { speed = 1.5f, damage = 0.75f, stamina = 15 }
+				new AnimationBalancing { speed = 1.5f, damage = 0.75f, stamina = 15 },
 			}
 		},
 		{
@@ -91,7 +91,7 @@ public class DualWield : BaseUnityPlugin
 				new AnimationBalancing { speed = 1.4f, damage = 0.3f, stamina = 32 },
 				new AnimationBalancing { speed = 1.4f, damage = 0.2f, stamina = 9 },
 				new AnimationBalancing { speed = 1.4f, damage = 0.2f, stamina = 9 },
-				new AnimationBalancing { speed = 2f, damage = 1.4f, stamina = 27 }
+				new AnimationBalancing { speed = 2f, damage = 1.4f, stamina = 27 },
 			}
 		},
 		{
@@ -100,9 +100,9 @@ public class DualWield : BaseUnityPlugin
 				new AnimationBalancing { speed = 1, damage = 0.5f, stamina = 40 },
 				new AnimationBalancing { speed = 1, damage = 0.9f, stamina = 15 },
 				new AnimationBalancing { speed = 1, damage = 0.9f, stamina = 15 },
-				new AnimationBalancing { speed = 1.2f, damage = 0.9f, stamina = 20 }
+				new AnimationBalancing { speed = 1.2f, damage = 0.9f, stamina = 20 },
 			}
-		}
+		},
 	};
 
 	private struct AnimationBalancing
@@ -139,7 +139,7 @@ public class DualWield : BaseUnityPlugin
 		replacementMap["DWaxes"] = new Dictionary<string, string>
 		{
 			["fight idle"] = "BlockExternal",
-			["Block idle"] = "BlockExternal"
+			["Block idle"] = "BlockExternal",
 		};
 		foreach (KeyValuePair<string, int> kv in attackMap)
 		{
@@ -244,7 +244,7 @@ public class DualWield : BaseUnityPlugin
 				{
 					damage = config("2 - " + balancingKv.Key, $"{configName} - Damage", balancing.damage * 100, new ConfigDescription(i == 0 ? $"The damage dealt by the special attack with {balancingKv.Key} as a percentage of the weapon damage." : $"The damage dealt by the {i}. attack of the {balancingKv.Key} attack combo as a percentage of the weapon damage.", new AcceptableValueRange<float>(0, 500))),
 					speed = config("2 - " + balancingKv.Key, $"{configName} - Speed", balancing.speed * 100, new ConfigDescription(i == 0 ? $"The attack speed of the special attack with {balancingKv.Key} as a percentage." : $"The attack speed of the {i}. attack of the {balancingKv.Key} attack combo. Provided as a percentage.", new AcceptableValueRange<float>(1, 300))),
-					stamina = config("2 - " + balancingKv.Key, $"{configName} - Stamina", balancing.stamina, new ConfigDescription(i == 0 ? $"The stamina usage of the special attack with {balancingKv.Key}." : $"The stamina usage of the {i}. attack of the {balancingKv.Key} attack combo.", new AcceptableValueRange<float>(0, 200)))
+					stamina = config("2 - " + balancingKv.Key, $"{configName} - Stamina", balancing.stamina, new ConfigDescription(i == 0 ? $"The stamina usage of the special attack with {balancingKv.Key}." : $"The stamina usage of the {i}. attack of the {balancingKv.Key} attack combo.", new AcceptableValueRange<float>(0, 200))),
 				};
 			}
 			balancingMap[balancingKv.Key] = balancingConfigs;
