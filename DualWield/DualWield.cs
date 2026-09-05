@@ -27,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.9";
+	private const string ModVersion = "1.0.10";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -723,7 +723,7 @@ public class DualWield : BaseUnityPlugin
 		}
 	}
 
-	[HarmonyPatch(typeof(Attack), nameof(Attack.OnAttackDone))]
+	[HarmonyPatch(typeof(Attack), nameof(Attack.Stop))]
 	public static class Patch_atkdone
 	{
 		private static void Prefix(Attack __instance)
