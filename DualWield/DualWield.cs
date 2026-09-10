@@ -27,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.10";
+	private const string ModVersion = "1.0.11";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
@@ -192,6 +192,7 @@ public class DualWield : BaseUnityPlugin
 		{
 			dualSkill.SkillGainFactor = experienceGainFactor.Value;
 		}
+
 		experienceLoss = config("1 - General", "Skill Experience Loss", 5, new ConfigDescription("How much experience to lose in the dual wielding skills on death.", new AcceptableValueRange<int>(0, 100)));
 		experienceLoss.SettingChanged += (_, _) =>
 		{
@@ -204,6 +205,7 @@ public class DualWield : BaseUnityPlugin
 		{
 			dualSkill.SkillLoss = experienceLoss.Value;
 		}
+
 		singleOffhandSkill = config("1 - General", "Single Offhand Skill", Toggle.Off, new ConfigDescription("If on, all weapon types share a single offhand skill."));
 		singleOffhandSkill.SettingChanged += (_, _) => ToggleOffhandSkill();
 
@@ -247,6 +249,7 @@ public class DualWield : BaseUnityPlugin
 					stamina = config("2 - " + balancingKv.Key, $"{configName} - Stamina", balancing.stamina, new ConfigDescription(i == 0 ? $"The stamina usage of the special attack with {balancingKv.Key}." : $"The stamina usage of the {i}. attack of the {balancingKv.Key} attack combo.", new AcceptableValueRange<float>(0, 200))),
 				};
 			}
+
 			balancingMap[balancingKv.Key] = balancingConfigs;
 		}
 
@@ -350,6 +353,7 @@ public class DualWield : BaseUnityPlugin
 				anims.Add(new KeyValuePair<AnimationClip, AnimationClip>(animation, animation));
 			}
 		}
+
 		aoc.ApplyOverrides(anims);
 		return aoc;
 	}
@@ -390,9 +394,11 @@ public class DualWield : BaseUnityPlugin
 				{
 					player.UnequipItem(player.m_leftItem, triggerEquipEffects);
 				}
+
 				player.m_leftItem = item;
 				return true;
 			}
+
 			return false;
 		}
 
@@ -552,6 +558,7 @@ public class DualWield : BaseUnityPlugin
 							controllerName = "DWaxes";
 						}
 					}
+
 					// in case this is called before the first Player.Start
 					if (CustomRuntimeControllers.TryGetValue(controllerName, out RuntimeAnimatorController controller))
 					{
@@ -591,6 +598,7 @@ public class DualWield : BaseUnityPlugin
 						item.m_attackForce = 0;
 					}
 				}
+
 				float dmgFactor = reverse ? 1 / kv.Value.dmgFactor : kv.Value.dmgFactor;
 				item.m_damages.Modify(dmgFactor);
 				item.m_backstabBonus /= dmgFactor;
@@ -609,6 +617,7 @@ public class DualWield : BaseUnityPlugin
 					{
 						alteredSharedData.Add(leftHand, new DmgFactor { dmgFactor = dmgFactor });
 					}
+
 					ApplyDmgFactor(false, __instance.m_attackAnimation);
 				}
 
@@ -653,6 +662,7 @@ public class DualWield : BaseUnityPlugin
 				__result = 0.03f + __instance.GetSkillFactor(skill) * 1.5f;
 				return false;
 			}
+
 			return true;
 		}
 	}
@@ -702,6 +712,7 @@ public class DualWield : BaseUnityPlugin
 				{
 					yield return instrs[i];
 				}
+
 				if (instrs[i].opcode == OpCodes.Ldfld && instrs[i].OperandIs(attackAngle))
 				{
 					yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(Mathf), nameof(Mathf.Abs), new[] { typeof(float) }));
