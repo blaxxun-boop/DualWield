@@ -27,7 +27,7 @@ public class DualWield : BaseUnityPlugin
 #endif
 
 	private const string ModName = "Dual Wield";
-	private const string ModVersion = "1.0.11";
+	private const string ModVersion = "1.0.12";
 	private const string ModGUID = "org.bepinex.plugins.dualwield";
 
 	private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion };
